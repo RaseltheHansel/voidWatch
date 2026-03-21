@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// People who login to VoidWatch dashboard
+model User {
+  id        String    @id @default(cuid())
+  name      String?
+  email     String?   @unique
+  image     String?
+  accounts  Account[]
+  sessions  Session[]
+  projects  Project[]
+  createdAt DateTime  @default(now())
+}
+
+// Each app being monitored is a "Project"
+// e.g. "My Marketplace Frontend", "My Marketplace Backend"
+model Project {
+  id         String   @id @default(cuid())
+  name       String
+  platform   String   @default("javascript")
+  // Unique key used in SDK to identify which project errors belong to
+  projectKey String   @unique @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  errors     Error[]
+  createdAt  DateTime @default(now())
+}
+
+// Every error captured from any project
+model Error {
+  id          String      @id @default(cuid())
+  message     String
+  stack       String?
+  type        String?
+  url         String?
+  environment String      @default("production")
+  status      ErrorStatus @default(UNRESOLVED)
+  userAgent   String?
+  // The END USER who experienced the error (not dashboard user)
+  userId      String?
+  userEmail   String?
+  metadata    Json?
+  // How many times this exact error occurred
+  count       Int         @default(1)
+  projectId   String
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  lastSeenAt  DateTime    @default(now())
+}
+
+enum ErrorStatus {
+  UNRESOLVED
+  RESOLVED
+  IGNORED
+}
+
+// NextAuth required models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  @@unique([identifier, token])
+}
