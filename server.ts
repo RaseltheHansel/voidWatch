@@ -1,28 +1,43 @@
 import { createServer } from 'http';
-import { Server } from 'socket.io';
 import next from 'next';
+import { Server as SocketServer } from 'socket.io';
 
-// ✅ Extend the global type
-declare global {
-  var io: Server | undefined;
-}
-
-const app = next({ dev: process.env.NODE_ENV !== 'production' });
+const dev    = process.env.NODE_ENV !== 'production';
+const app    = next({ dev });
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
-  const httpServer = createServer(handle);
-  const io = new Server(httpServer);
+  const httpServer = createServer((req, res) => {
+    // ← removed parse and parseUrl — handle works without them
+    handle(req, res);
+  });
+
+  const io = new SocketServer(httpServer, {
+    cors: {
+      origin: '*',
+      methods: ['GET', 'POST'],
+    },
+  });
 
   io.on('connection', (socket) => {
-    socket.on('join_project', (projectId: string) => {
-      socket.join(projectId);
+    console.log('Dashboard connected:', socket.id);
+
+    socket.on('subscribe_project', (projectId: string) => {
+      // ← removed space inside template literal
+      socket.join(`project:${projectId}`);
+      console.log(`Subscribed to project: ${projectId}`);
+    });
+
+    socket.on('disconnect', () => {
+      console.log('Dashboard disconnected:', socket.id);
     });
   });
 
-  global.io = io;
+  // ← fixed any → unknown
+  (global as unknown as { io: SocketServer }).io = io;
 
-  httpServer.listen(3000, () => {
-    console.log('Server running on http://localhost:3000');
+  const PORT = parseInt(process.env.PORT || '3000', 10);
+  httpServer.listen(PORT, () => {
+    console.log(`⚫ VoidWatch running on http://localhost:${PORT}`);
   });
 });
